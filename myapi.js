@@ -3,38 +3,60 @@ var express = require('express');
 
 var app = express();
 
-var inputs = [{ pin: '11', gpio: '17', value: 1 },
-              { pin: '12', gpio: '18', value: 0 }];
-
-var services = {}
+var services = {
+"Cengage" : {}
+"Yabla" : {}
+}
 
 var csv = require("fast-csv");
+var fs = require('file-system');
 
-csv
- .fromPath("services.csv", { headers : ["Name","URL","ImageURL","Username",,"Assignments","Date"]})
- .on("data", function(data){
-   try {
-     services[data["Name"]][data["Username"]] = data;
-   }
-   catch(err) {
-     services[data["Name"]] = {}
-     services[data["Name"]][data["Username"]] = data;
-   }
- })
- .on("end", function(){
-     console.log(services)
-     console.log("done");
- });
+function addService(name, user, pass){
+  var csvStream = csv.createWriteStream({headers: true}),
+    writableStream = fs.createWriteSTream("services.csv");
+
+  writableStream.on("finish", function(){
+    console.log("done writing");
+  });
+
+  csvStream.pipe(writableStream);
+  csvStream.write({"Name": name, "Username": user, "Password": pass, "Assignments": "0", "Date": "N/A"});
+  csvStream.end();
+}
+
+function readServices(){
+  csv
+   .fromPath("services.csv", { headers : ["Name","Username",,"Assignments","Date"]})
+   .on("data", function(data){
+     try {
+       services[data["Name"]][data["Username"]] = data;
+     }
+   })
+   .on("end", function(){
+       console.log(services)
+       console.log("done");
+   });
+}
+
+
 
 app.use(express['static'](__dirname ));
 
-// Express route for incoming requests for a customer name
-app.get('/inputs/:id', function(req, res) {
-  res.status(200).send(inputs[req.params.id]);
-});
-
+// Get information for the specified service/username combo
 app.get('/service/:name/:user', function(req, res) {
   res.status(200).send(services[req.params.name][req.params.user]);
+});
+
+// Add a user to the list
+app.get('/add/:name/:user/:pass', function(req, res) {
+  if (req.params.name in services){
+    if !(req.params.user in services[req.params.name] || req.params.pass != services[req.params.name][req.params.user]["Password"]){
+      addService(req.params.name, req.params.user, req.params.pass);
+      readServices();
+    res.status(200).send(services[req.params.name][req.params.user]);
+  } else {
+    res.status(500).send('Oops, Something went wrong!')
+  }
 });
 
 // Express route for any other unrecognised incoming requests
